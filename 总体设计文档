@@ -1,0 +1,362 @@
+# Bookstore 书店管理系统总体设计文档
+
+## 一、项目名称 / 文档作者
+
+- 项目名称：Bookstore 书店管理系统
+- 文档作者：朱佳琪
+
+---
+
+## 二、程序功能概述
+
+Bookstore 是一个基于命令行的书店管理系统，面向四类“用户状态”：
+
+- 游客（未登录，权限 {0}）：只能注册新账号。
+- 顾客（权限 {1}）：可以登录、查询图书、购买图书。
+- 员工（权限 {3}）：在顾客功能基础上，可修改图书信息、进货、创建账号。
+- 店主 / 超级管理员 root（权限 {7}）：拥有所有权限，并可查询财务记录、生成财务报表和查询员工工作报告和系统日志。
+
+系统通过命令行读入一系列指令，根据指令实现如下核心功能：
+
+1. 账户系统
+    - 注册、登录（支持嵌套登录栈）、注销
+    - 修改密码、创建/删除用户
+    - 基于权限的访问控制、异常处理
+
+2. 图书系统
+    - 维护图书基本信息：ISBN、书名、作者、关键词、价格、库存
+    - 根据 ISBN / 书名 / 作者 / 关键字检索图书
+    - 购买图书（减少库存，计算金额）
+    - 修改图书信息、进货
+
+3. 日志与财务系统
+    - 记录每一笔买入/卖出交易
+    - 统计某段交易数目的收支情况
+    - 记录每条命令（操作人、操作类型、时间、参数等），生成员工工作报告与整体日志。
+
+4. 存储与索引系统
+    - 所有主体数据存储到文件
+    - 使用索引结构提高查询效率
+
+---
+
+## 三、主体逻辑说明
+
+### 3.1 程序整体运行流程
+
+1. 程序启动：
+    - 打开/创建各个数据文件；
+    - 如检测为首次运行，则自动创建超级管理员账户 `root/sjtu`，权限 {7}。
+
+2. 主循环：
+    - 从 `std::in` 读取一行命令字符串；
+    - `CommandParser` 对字符串进行词法拆分、语法校验；
+    - 基于当前登录栈顶用户的权限，调用相应模块；
+    - 模块通过 Storage 访问底层文件与索引，并返回结果；
+    - 将结果（成功输出或 `Invalid`）写回 `stdout`。
+
+3. 退出：
+    - 遇到 `quit` 或 `exit` 指令，清空登录栈，关闭所有文件句柄，正常终止。
+
+### 3.2 登录栈与权限控制
+
+- 使用一个栈结构 `SessionStack` 维护已登录账户；
+- 每次 `su` 指令成功后，向栈顶压入新的用户；`logout` 弹出栈顶；
+- 当前操作账户始终为栈顶元素；如果栈为空，则认为权限为 {0}（游客）；
+- 指令执行前统一检查当前权限是否满足该指令的最低要求，不满足则直接输出 `Invalid`。
+
+### 3.3 模块调用关系（逻辑）
+
+- `main`：
+    - 创建 `Application` 对象，进入主循环。
+- `Application`：
+    - 持有 `CommandParser`、`SessionStack` 以及各 Manager（AccountManager、BookManager、LogManager）实例；
+    - 根据解析结果分发到对应 Manager 的接口函数。
+- `AccountManager`：
+    - 针对用户表进行增删改查，与 `UserStorage` / 索引交互。
+- `BookManager`：
+    - 针对图书表进行增删改查，与 `BookStorage` 与各种索引交互。
+- `FinanceManager` / `LogManager`：
+    - 针对财务记录表、操作日志表操作，并提供查询和报表接口。
+- `StorageEngine` + `MemoryRiver`：
+    - 统一封装底层文件读写与索引结构。
+
+---
+
+## 四、代码文件结构
+
+- `main.cpp`
+    - 程序入口，创建 `Application`，调用 `run()`。
+
+- `application.hpp / application.cpp`
+    - 定义 `Application` 类，维护命令循环和模块实例。
+
+- `command.hpp / command.cpp`
+    - `CommandParser`：负责字符串解析与合法性校验；
+    - `Command`：保存解析后的指令类型与参数。
+
+- `session.hpp / session.cpp`
+    - `Session`：登录用户信息（userID、privilege、selectedISBN）；
+    - `SessionStack`：维护登录栈。
+
+- `user.hpp / user.cpp`
+    - `User` 结构体；
+    - `AccountManager` 类，实现注册、登录、修改密码、添加/删除用户等。
+
+- `book.hpp / book.cpp`
+    - `Book` 结构体；
+    - `BookManager` 类，实现图书查询、选择、修改、购买、进货等。
+
+- `finance.hpp / finance.cpp`
+    - `FinanceRecord` 结构体；
+    - `FinanceManager`，实现 `show finance` 与财务报表。
+
+- `log.hpp / log.cpp`
+    - `OperationRecord` 结构体；
+    - `LogManager`，实现 `log`、`report employee`、`report finance` 等。
+
+- `storage.hpp / storage.cpp`
+    - 基于 `MemoryRiver<T>` 的模板封装，实现顺序表与索引存储。
+
+- `index.hpp / index.cpp`
+    - `IndexEngine` 或 `BPTIndex` 类：
+    - 对多个字段建立索引（ISBN / name / author / keyword）。
+
+---
+
+## 五、功能设计
+
+### 5.1 模块划分
+
+1. 命令解析模块（CommandParser）
+    - 完成一行字符串到结构化 `Command` 的转换；
+    - 校验指令关键字及参数格式（长度、字符集）；
+    - 将语法错误统一转换为 `Invalid`。
+
+2. 账户管理模块（AccountManager）
+    - 功能：`register`、`su`、`logout`、`passwd`、`useradd`、`delete`。
+    - 维护账户索引；
+    - 权限检查。
+
+3. 图书管理模块（BookManager）
+    - 功能：`show`、`buy`、`select`、`modify`、`import`。
+    - 四种索引：
+        - ISBN 索引（唯一）
+        - 书名索引
+        - 作者索引
+        - 关键词索引（关键词拆分后逐个索引）
+    - `show` 根据不同 field 选择对应索引，读取 Book 主表记录并排序输出。
+
+4. 财务管理模块（FinanceManager）
+    - 功能：`show finance`、`report finance`。
+    - 记录每一次 `buy` / `import` 的金额及类型；
+    - 按最近 N 笔或全部交易统计收入与支出。
+
+5. 日志管理模块（LogManager）
+    - 功能：`log`、`report employee`；
+    - 为每条指令记录：时间戳、操作者、指令名、摘要；
+    - 按员工统计、按时间顺序输出。
+
+6. 存储与索引模块（StorageEngine + IndexEngine）
+    - 使用 `MemoryRiver<T>` ，实现顺序写入 / 更新 / 随机读取。
+    - 实现块状链表及索引。
+    
+### 5.2 功能结构图
+
+```mermaid
+flowchart LR
+    main --> Application
+    Application --> CommandParser
+    Application --> SessionStack
+    Application --> AccountManager
+    Application --> BookManager
+    Application --> FinanceManager
+    Application --> LogManager
+
+    AccountManager --> UserStorage
+    BookManager --> BookStorage
+    FinanceManager --> FinanceStorage
+    LogManager --> LogStorage
+
+    UserStorage --> MemoryRiver
+    BookStorage --> MemoryRiver
+    FinanceStorage --> MemoryRiver
+    LogStorage --> MemoryRiver
+
+    BookManager --> ISBNIndex
+    BookManager --> NameIndex
+    BookManager --> AuthorIndex
+    BookManager --> KeywordIndex
+
+    ISBNIndex --> MemoryRiver
+    NameIndex --> MemoryRiver
+    AuthorIndex --> MemoryRiver
+    KeywordIndex --> MemoryRiver
+```
+
+---
+
+## 六、数据库设计
+
+- 每本书有一个内部编号 `id`。
+- `id` 从 1 开始递增。
+- `id` 和 Books 文件里的位置一一对应：第 i 本书存放在 Books 文件的第 i 个位置上。
+
+### 1. 使用块状链表存储的索引文件
+
+1. 账户索引文件（Account_head / Account_body）
+    - key：UserID
+    - value：该用户在 Users 文件中的位置
+
+2. 图书索引(ISBN)（ISBN_head / ISBN_body）
+    - key：ISBN
+    - value：图书 id
+
+3. 图书索引(书名)（BookName_head / BookName_body）
+    - key：书名 BookName
+    - value：图书 id
+
+4. 图书索引(作者)（Author_head / Author_body）
+    - key：作者 Author
+    - value：图书 id
+
+5. 图书索引(关键词)（Keyword_head / Keyword_body）
+    - key：单个关键词 Keyword
+    - value：图书 id
+
+6. 员工日志索引文件（EmployeeLog_head / EmployeeLog_body）
+    - key：员工 UserID
+    - value：该员工日志在 Log 文件中的位置
+
+### 2. 使用 MemoryRiver 存储的主数据文件
+
+1. 账户主文件（Users）
+    - 顺序存储所有用户信息（User 类）
+
+2. 图书主文件（Books）
+    - 顺序存储所有图书信息（Book 类）
+    - 开头存储图书总数
+    - 编号为 id = i 的书存放在第 i 个位置上
+
+3. 财务记录文件（Finance）
+    - 按时间顺序存储每一条财务记录（FinanceRecord 类）
+
+4. 财务统计文件（FinanceInfo）
+    - 存储财务报表记录（FinanceInfo 类）
+
+5. 日志文件（Log）
+    - 按时间顺序存储操作日志（OperationRecord 类）
+
+6. 员工列表文件（Employees）
+    - 按创建顺序存储每个员工的 UserID
+
+7. 全局信息文件（Meta）
+    - 存一些全局计数和标志，例如图书总数、是否已初始化 root 账号等
+
+## 七、类与结构体设计
+
+### 7.1 通用存储类
+
+#### `template <class T, int info_len> class MemoryRiver`
+
+- 文件名、`fstream` 对象
+- `initialise` / `get_info` / `write_info`：维护文件起始 info 区域。
+- `write(T &t)`：在文件末尾写入对象，返回偏移。
+- `update(T &t, int index)`：按偏移覆盖更新。
+- `read(T &t, int index)`：按偏移读取对象。
+
+### 7.2 索引结构类
+
+#### `struct IndexNode`
+- `char key[64];`
+- `int record_pos;`（在主表记录中写入的位置 index）
+
+#### `class BlockIndex`
+- 使用 `MemoryRiver<IndexNode>` 存储节点索引；
+- 维护块结构 `BlockMeta`，记录块起始位置、当前元素数、下一块位置等。
+- 接口：
+    - `insert(key, record_pos)`
+    - `erase(key, record_pos)`
+    - `find_all(key) -> vector<int>`
+
+### 7.3 业务数据结构
+
+#### `struct User`
+- 字段：`user_id`、`password`、`username`、`privilege`。
+
+#### `struct Book`
+- 字段：`isbn`、`name`、`author`、`keywords`、`price`、`quantity`。
+
+#### `struct FinanceRecord`
+- 字段：`is_income`、`value`。
+
+#### `struct OperationRecord`
+- 字段：`user_id`、`op_name`、`args`、`timestamp`。
+
+### 7.4 业务类
+
+#### `class AccountManager`
+
+- 依赖：`MemoryRiver<User>` , `BlockIndex`（user_id）。
+- 接口示例：
+    - `bool register_user(const string &user_id,
+                       const string &password,
+                       const string &user_name)`
+    - `bool login(const string &user_id,
+               const string &password,
+               bool has_password,
+               User &out_user)`
+    - `bool logout(SessionStack &sessions)`
+    - `bool passwd(const string &user_id,
+                const string &old_password,
+                const string &new_password,
+                bool has_old_password)`
+    - `bool useradd(const string &user_id,
+                 const string &password,
+                 int privilege,
+                 const string &user_name)`
+    - `bool delete_user(const string &user_id)`
+
+#### `class BookManager`
+
+- 依赖：`MemoryRiver<Book>` , `BlockIndex`。
+- 接口：
+    - `void show_by_field(const string &field,
+                       const string &value)`
+    - `bool buy(isbn, quantity)`
+    - `bool select(isbn)`
+    - `bool modify_selected(Session &session,
+                         const string &new_isbn,
+                         const string &new_name,
+                         const string &new_author,
+                         const string &new_keywords,
+                         double new_price)`
+    - `bool import_selected(quantity, total_cost)`
+
+#### `class FinanceManager`
+
+- 依赖：`MemoryRiver<FinanceRecord>`。
+- 接口：
+    - `add_income(double v)`
+    - `add_expense(double v)`
+    - `query_last_n(int n)`
+    - `report()`
+
+#### `class LogManager`
+
+- 依赖：`MemoryRiver<OperationRecord>`。
+- 接口：
+    - `append_record(Session, Command)`
+    - `show_log()`
+    - `report_employee()`
+
+#### `class Application`
+
+- 成员：
+    - `CommandParser parser;`
+    - `SessionStack sessions;`
+    - 各 Manager 实例。
+- 接口：
+    - `run()`：处理输入直至 EOF 或退出命令。
+
+---
