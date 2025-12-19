@@ -3,6 +3,7 @@
 #include <vector>
 
 enum class CommandType {
+    Empty,
     Unknown,
     Quit,
     Exit,

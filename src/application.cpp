@@ -14,8 +14,13 @@ Application::Application()
 void Application::run() {
     std::string line;
     while (std::getline(std::cin, line)) {
+        // 兼容换行？
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+
+        if (line.find_first_not_of(' ') == std::string::npos) continue;
+
         Command cmd = parser.parse(line);
-        
+
         if (cmd.type == CommandType::Quit || cmd.type == CommandType::Exit) {
             break;
         }
@@ -28,6 +33,8 @@ void Application::handle_command(const Command &cmd) {
     int privilege = sessions.current_privilege();
     
     switch (cmd.type) {
+    case CommandType::Empty:
+        break;
     case CommandType::Register:
         if (cmd.args.size() == 3) {
             bool ok = account_manager.register_user(cmd.args[0], cmd.args[1], cmd.args[2]);

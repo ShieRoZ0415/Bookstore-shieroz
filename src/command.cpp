@@ -53,7 +53,10 @@ Command CommandParser::parse(const std::string &line) {
     cmd.type = CommandType::Unknown;
     
     std::vector<std::string> tokens = split(line);
-    if (tokens.empty()) return cmd;
+    if (tokens.empty()) {
+        cmd.type = CommandType::Empty;
+        return cmd;
+    }
     
     std::string op = tokens[0];
     

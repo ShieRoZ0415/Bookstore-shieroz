@@ -48,4 +48,5 @@ private:
 
     bool find_user(const std::string &user_id, User &user, int &index);
     bool validate_string(const std::string &str, bool allow_quotes);
+    void rebuild_users_file();
 };

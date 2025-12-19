@@ -25,14 +25,58 @@ AccountManager::AccountManager()
     : user_file("users.dat") {
 }
 
+void AccountManager::rebuild_users_file() {
+    const char* FN = "users.dat";
+    user_file.initialise(FN);
+    user_file.write_info(0, 1);
+
+    User root("root", "sjtu", "Super Admin", 7);
+    user_file.write(root);
+    user_file.write_info(1, 1);
+}
+
+
 void AccountManager::initialize() {
+    const char *FN = "users.dat";
+    const int HEADER = sizeof(int);
+
+    bool need_init = false;
+
+    // 文件不存在需要初始化
+    std::ifstream fin;
+    fin.open(FN, std::ios::binary);
+
+    if (!fin.good()) {
+        rebuild_users_file();
+        return;
+    }
+    // 文件长度检查
+    fin.seekg(0, std::ios::end);
+    std::streamoff sz = fin.tellg();
+    fin.close();
+
+    if (sz < static_cast<std::streamoff>(HEADER + (int)sizeof(User))) {
+        rebuild_users_file();
+        return;
+    }
+
     int n = 0;
     user_file.get_info(n, 1);
     if (n == 0) {
-        User root("root", "sjtu", "Super Admin", 7);
-        user_file.write(root);
-        user_file.write_info(1, 1);
+        rebuild_users_file();
+        return;
     }
+
+    // 验证第一条是否是 root
+    User first;
+    user_file.read(first, HEADER);
+
+    if (std::strcmp(first.user_id, "root") != 0 ||
+        std::strcmp(first.password, "sjtu") != 0 ||
+        first.privilege != 7) {
+        rebuild_users_file();
+        return;
+        }
 }
 
 bool AccountManager::validate_string(const std::string &str, bool allow_quotes) {
@@ -51,7 +95,9 @@ bool AccountManager::find_user(const std::string &id, User &user, int &index) {
     user_file.get_info(n, 1);
 
     for (int i = 1; i <= n; ++i) {
-        int pos = sizeof(int) + (i - 1) * sizeof(User);
+        const int HEADER = sizeof(int);
+        int pos = HEADER + (i - 1) * sizeof(User);
+
         User tmp;
         user_file.read(tmp, pos);
 
