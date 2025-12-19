@@ -1,5 +1,4 @@
 #pragma once
-#include "MemoryRiver.hpp"
 #include <string>
 
 #include "MemoryRiver.h"

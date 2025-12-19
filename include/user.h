@@ -2,7 +2,6 @@
 #include <string>
 
 #include "MemoryRiver.h"
-#include "MemoryRiver.hpp"
 
 struct User {
     char user_id[31];
