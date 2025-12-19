@@ -1,8 +1,14 @@
-//
-// Created by 14176 on 2025/12/16.
-//
+#pragma once
+#include <string>
 
-#ifndef BOOKSTORE_2025_LOG_H
-#define BOOKSTORE_2025_LOG_H
+class LogManager {
+public:
+    LogManager();
 
-#endif //BOOKSTORE_2025_LOG_H
+    void generate_employee_report();
+    void show_log();
+
+private:
+    void print_header(const std::string &title);
+    void print_separator();
+};
