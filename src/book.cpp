@@ -1,6 +1,7 @@
 #include "include/book.h"
 
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include <algorithm>
 #include <sstream>
@@ -33,7 +34,18 @@ Book::Book(const std::string &i, const std::string &n,
 }
 
 BookManager::BookManager()
-    : book_file("books.dat") {}
+    : book_file("books.dat") {
+    std::ifstream fin("books.dat", std::ios::binary);
+    bool need_init = false;
+    if (!fin.good()) {
+        need_init = true;
+    } else {
+        fin.seekg(0, std::ios::end);
+        if (fin.tellg() < static_cast<std::streamoff>(sizeof(int))) need_init = true;
+    }
+    fin.close();
+    if (need_init) book_file.initialise();
+}
 
 bool BookManager::validate_isbn(const std::string &isbn) {
     if (isbn.empty() || isbn.length() > 20) return false;

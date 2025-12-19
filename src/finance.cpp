@@ -2,9 +2,21 @@
 
 #include <iostream>
 #include <iomanip>
+#include <fstream>
 
 FinanceManager::FinanceManager()
-    : finance_file("finance.dat") {}
+    : finance_file("finance.dat") {
+    std::ifstream fin("finance.dat", std::ios::binary);
+    bool need_init = false;
+    if (!fin.good()) {
+        need_init = true;
+    } else {
+        fin.seekg(0, std::ios::end);
+        if (fin.tellg() < static_cast<std::streamoff>(3 * sizeof(int))) need_init = true;
+    }
+    fin.close();
+    if (need_init) finance_file.initialise();
+}
 
 void FinanceManager::add_income(double amount) {
     FinanceRecord record(true, amount);
