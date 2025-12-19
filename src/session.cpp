@@ -17,9 +17,8 @@ void SessionStack::push(const Session &s) {
 }
 
 void SessionStack::pop() {
-    if (!stack.empty()) {
-        stack.pop_back();
-    }
+    if (stack.empty()) return;
+    stack.pop_back();
 }
 
 int SessionStack::current_privilege() const {

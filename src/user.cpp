@@ -82,10 +82,15 @@ void AccountManager::initialize() {
 bool AccountManager::validate_string(const std::string &str, bool allow_quotes) {
     if (str.empty() || str.length() > 30) return false;
 
-    for (char c : str) {
-        if (!std::isalnum(c) && c != '_' && (allow_quotes || c != '"')) {
-            return false;
-        }
+    for (unsigned char uc : str) {
+        char c = static_cast<char>(uc);
+
+        if (c == ' ') return false;
+
+        if (uc < 33 || uc > 126) return false;
+
+        if (!allow_quotes && c == '"') return false;
+
     }
     return true;
 }

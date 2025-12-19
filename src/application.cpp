@@ -68,11 +68,7 @@ void Application::handle_command(const Command &cmd) {
     }
         
     case CommandType::Logout:
-        if (!sessions.empty()) {
-            sessions.pop();
-        } else {
-            std::cout << "Invalid\n";
-        }
+        sessions.pop();
         break;
         
     case CommandType::Passwd:
