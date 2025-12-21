@@ -98,7 +98,19 @@ void Application::handle_command(const Command &cmd) {
         if (cmd.args.size() == 4 && privilege >= 3) {
             std::string user_id = cmd.args[0];
             std::string password = cmd.args[1];
-            int user_privilege = std::stoi(cmd.args[2]);
+            int user_privilege = 0;
+            try {
+                size_t p = 0;
+                user_privilege = std::stoi(cmd.args[2], &p);
+                if (p != cmd.args[2].size()) {
+                    std::cout << "Invalid\n";
+                    break;
+                }
+            } catch (...) {
+                std::cout << "Invalid\n";
+                break;
+            }
+
             std::string username = cmd.args[3];
             
             if (user_privilege != 1 && user_privilege != 3 && user_privilege != 7) {
@@ -150,7 +162,19 @@ void Application::handle_command(const Command &cmd) {
     case CommandType::Buy:
         if (cmd.args.size() == 2 && privilege >= 1) {
             std::string isbn = cmd.args[0];
-            int quantity = std::stoi(cmd.args[1]);
+            int quantity = 0;
+            try {
+                size_t p = 0;
+                quantity = std::stoi(cmd.args[1], &p);
+                if (p != cmd.args[1].size()) {
+                    std::cout << "Invalid\n";
+                    break;
+                }
+            } catch (...) {
+                std::cout << "Invalid\n";
+                break;
+            }
+
             double total_cost = 0.0;
             
             if (quantity <= 0) {
@@ -227,13 +251,27 @@ void Application::handle_command(const Command &cmd) {
                 break;
             }
             
-            int quantity = std::stoi(cmd.args[0]);
-            double total_cost = std::stod(cmd.args[1]);
-            
+            int quantity = 0;
+            double total_cost = 0.0;
+
+            try {
+                size_t p1 = 0, p2 = 0;
+                quantity = std::stoi(cmd.args[0], &p1);
+                total_cost = std::stod(cmd.args[1], &p2);
+                if (p1 != cmd.args[0].size() || p2 != cmd.args[1].size()) {
+                    std::cout << "Invalid\n";
+                    break;
+                }
+            } catch (...) {
+                std::cout << "Invalid\n";
+                break;
+            }
+
             if (quantity <= 0 || total_cost <= 0) {
                 std::cout << "Invalid\n";
                 break;
             }
+
             
             bool ok = book_manager.import(sessions.top().selected_isbn, quantity, total_cost);
             if (ok) {
@@ -277,8 +315,20 @@ void Application::handle_show_finance(const std::vector<std::string> &args) {
     if (args.empty()) {
         finance_manager.show_all();
     } else if (args.size() == 1) {
-        int count = std::stoi(args[0]);
+        int count = 0;
+        try {
+            size_t p = 0;
+            count = std::stoi(args[0], &p);
+            if (p != args[0].size()) {
+                std::cout << "Invalid\n";
+                return;
+            }
+        } catch (...) {
+            std::cout << "Invalid\n";
+            return;
+        }
         finance_manager.show_last_n(count);
+
     } else {
         std::cout << "Invalid\n";
     }
