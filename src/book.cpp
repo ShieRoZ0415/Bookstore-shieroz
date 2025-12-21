@@ -157,7 +157,7 @@ void BookManager::show_by_name(const std::string &name) {
     auto books = get_all_books();
     bool found = false;
     for (const auto &book : books) {
-        if (std::string(book.name).find(name) != std::string::npos) {
+        if (std::strcmp(book.name, name.c_str()) == 0) {
             print_book(book);
             found = true;
         }
@@ -171,7 +171,7 @@ void BookManager::show_by_author(const std::string &author) {
     auto books = get_all_books();
     bool found = false;
     for (const auto &book : books) {
-        if (std::string(book.author).find(author) != std::string::npos) {
+        if (std::strcmp(book.author, author.c_str()) == 0) {
             print_book(book);
             found = true;
         }
