@@ -72,7 +72,6 @@ void AccountManager::initialize() {
     user_file.read(first, HEADER);
 
     if (std::strcmp(first.user_id, "root") != 0 ||
-        std::strcmp(first.password, "sjtu") != 0 ||
         first.privilege != 7) {
         rebuild_users_file();
         return;
