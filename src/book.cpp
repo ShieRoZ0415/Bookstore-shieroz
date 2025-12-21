@@ -143,7 +143,7 @@ void BookManager::show_by_isbn(const std::string &isbn) {
     auto books = get_all_books();
     bool found = false;
     for (const auto &book : books) {
-        if (std::string(book.isbn).find(isbn) != std::string::npos) {
+        if (std::strcmp(book.isbn, isbn.c_str()) == 0) {
             print_book(book);
             found = true;
         }
