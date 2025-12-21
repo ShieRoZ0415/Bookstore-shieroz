@@ -9,6 +9,46 @@
 #include <set>
 #include <string>
 
+// 价格格式校验：必须有整数部分；可选小数部分；小数位 1~2 位
+// 允许：0, 10, 10.0, 10.00, 0.12
+// 禁止：.12, 01, 01.2, 10., 10.000, -1, +1
+static bool is_valid_price_literal(const std::string &s) {
+    if (s.empty()) return false;
+
+    // 不允许正负号
+    if (s[0] == '+' || s[0] == '-') return false;
+
+    // 拆分整数/小数
+    std::size_t dot = s.find('.');
+    if (dot != std::string::npos && s.find('.', dot + 1) != std::string::npos) return false; // 多个点
+
+    std::string int_part = (dot == std::string::npos) ? s : s.substr(0, dot);
+    std::string frac_part = (dot == std::string::npos) ? "" : s.substr(dot + 1);
+
+    // 必须有整数部分
+    if (int_part.empty()) return false;
+
+    // 整数部分必须全是数字
+    for (unsigned char c : int_part) {
+        if (!std::isdigit(c)) return false;
+    }
+
+    // 禁止前导零
+    if (int_part.size() > 1 && int_part[0] == '0') return false;
+
+    // 如果有小数点，必须有 1~2 位小数，且全数字
+    if (dot != std::string::npos) {
+        if (frac_part.empty()) return false;
+        if (frac_part.size() > 2) return false;
+        for (unsigned char c : frac_part) {
+            if (!std::isdigit(c)) return false;
+        }
+    }
+
+    return true;
+}
+
+
 Book::Book() {
     std::memset(isbn, 0, sizeof(isbn));
     std::memset(name, 0, sizeof(name));
@@ -66,18 +106,28 @@ bool BookManager::validate_string_no_quotes(const std::string &str) {
 bool BookManager::validate_keywords(const std::string &keywords_str) {
     if (keywords_str.empty() || keywords_str.length() > 60) return false;
 
+    auto valid_token = [](const std::string &kw) -> bool {
+        if (kw.empty()) return false;
+        for (unsigned char uc : kw) {
+            char c = static_cast<char>(uc);
+            if (uc < 33 || uc > 126) return false;
+            if (std::isspace(uc)) return false;
+            if (c == '"' || c == '|') return false;
+        }
+        return true;
+    };
+
     std::istringstream iss(keywords_str);
     std::string keyword;
     std::set<std::string> unique_keywords;
 
     while (std::getline(iss, keyword, '|')) {
-        if (keyword.empty()) return false;
-        if (unique_keywords.find(keyword) != unique_keywords.end()) return false;
-        unique_keywords.insert(keyword);
+        if (!valid_token(keyword)) return false;
+        if (!unique_keywords.insert(keyword).second) return false;
     }
-
     return true;
 }
+
 
 bool BookManager::find_by_isbn(const std::string &isbn_str, Book &book, int &index) {
     int n = 0;
@@ -306,6 +356,7 @@ bool BookManager::modify(const int &selected_pos,
             std::strncpy(book.keywords, value.c_str(), 60);
             book.keywords[60] = '\0';
         } else if (key == "price") {
+            if (!is_valid_price_literal(value)) return false;
             try {
                 std::size_t p = 0;
                 double price = std::stod(value, &p);

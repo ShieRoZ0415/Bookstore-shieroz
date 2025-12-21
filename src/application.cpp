@@ -5,6 +5,66 @@
 #include <iomanip>
 #include <algorithm>
 #include <regex>
+#include <cctype>
+#include <limits>
+
+static bool parse_int_strict(const std::string& s, int& out) {
+    if (s.empty()) return false;
+    for (unsigned char c : s) if (!std::isdigit(c)) return false;
+
+    // 前导 0 非法
+    if (s.size() > 1 && s[0] == '0') return false;
+
+    try {
+        std::size_t p = 0;
+        long long v = std::stoll(s, &p);
+        if (p != s.size()) return false;
+        if (v < std::numeric_limits<int>::min() || v > std::numeric_limits<int>::max()) return false;
+        out = static_cast<int>(v);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+static bool parse_price_strict(const std::string& s, double& out) {
+    if (s.empty()) return false;
+    if (s[0] == '+' || s[0] == '-') return false;
+
+    std::size_t dot = s.find('.');
+    if (dot != std::string::npos && s.find('.', dot + 1) != std::string::npos) return false;
+
+    std::string int_part = (dot == std::string::npos) ? s : s.substr(0, dot);
+    std::string frac_part = (dot == std::string::npos) ? "" : s.substr(dot + 1);
+
+    // 必须有整数部分
+    if (int_part.empty()) return false;
+
+    for (unsigned char c : int_part) if (!std::isdigit(c)) return false;
+
+    // 前导 0 非法
+    if (int_part.size() > 1 && int_part[0] == '0') return false;
+
+    if (dot != std::string::npos) {
+        // 小数点后必须有数字
+        if (frac_part.empty()) return false;
+        // 小数位数超过两位非法
+        if (frac_part.size() > 2) return false;
+        for (unsigned char c : frac_part) if (!std::isdigit(c)) return false;
+    }
+
+    try {
+        std::size_t p = 0;
+        double v = std::stod(s, &p);
+        if (p != s.size()) return false;
+        if (v < 0) return false;
+        out = v;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 
 Application::Application()
     : account_manager(), book_manager(), finance_manager(), log_manager() {
@@ -18,11 +78,22 @@ void Application::run() {
 
         bool all_space = true;
         for (unsigned char ch : line) {
-            if (!std::isspace(ch)) { all_space = false; break; }
+            if (ch != ' ') { all_space = false; break; }  // 只认空格
         }
         if (all_space) continue;
 
+        bool bad = false;
+        for (unsigned char ch : line) {
+            if (ch == ' ') continue;
+            if (!std::isprint(ch)) { bad = true; break; }
+        }
+        if (bad) {
+            std::cout << "Invalid\n";
+            continue;
+        }
+
         Command cmd = parser.parse(line);
+
 
         if (cmd.type == CommandType::Quit || cmd.type == CommandType::Exit) {
             break;
@@ -102,21 +173,14 @@ void Application::handle_command(const Command &cmd) {
             std::string user_id = cmd.args[0];
             std::string password = cmd.args[1];
             int user_privilege = 0;
-            try {
-                size_t p = 0;
-                user_privilege = std::stoi(cmd.args[2], &p);
-                if (p != cmd.args[2].size()) {
-                    std::cout << "Invalid\n";
-                    break;
-                }
-            } catch (...) {
+            if (!parse_int_strict(cmd.args[2], user_privilege)) {
                 std::cout << "Invalid\n";
                 break;
             }
 
             std::string username = cmd.args[3];
             
-            if (user_privilege != 1 && user_privilege != 3 && user_privilege != 7) {
+            if (user_privilege != 0 && user_privilege != 1 && user_privilege != 3 && user_privilege != 7) {
                 std::cout << "Invalid\n";
                 break;
             }
@@ -166,17 +230,11 @@ void Application::handle_command(const Command &cmd) {
         if (cmd.args.size() == 2 && privilege >= 1) {
             std::string isbn = cmd.args[0];
             int quantity = 0;
-            try {
-                size_t p = 0;
-                quantity = std::stoi(cmd.args[1], &p);
-                if (p != cmd.args[1].size()) {
-                    std::cout << "Invalid\n";
-                    break;
-                }
-            } catch (...) {
+            if (!parse_int_strict(cmd.args[1], quantity)) {
                 std::cout << "Invalid\n";
                 break;
             }
+
 
             double total_cost = 0.0;
             
@@ -260,18 +318,15 @@ void Application::handle_command(const Command &cmd) {
             int quantity = 0;
             double total_cost = 0.0;
 
-            try {
-                size_t p1 = 0, p2 = 0;
-                quantity = std::stoi(cmd.args[0], &p1);
-                total_cost = std::stod(cmd.args[1], &p2);
-                if (p1 != cmd.args[0].size() || p2 != cmd.args[1].size()) {
-                    std::cout << "Invalid\n";
-                    break;
-                }
-            } catch (...) {
+            if (!parse_int_strict(cmd.args[0], quantity)) {
                 std::cout << "Invalid\n";
                 break;
             }
+            if (!parse_price_strict(cmd.args[1], total_cost)) {
+                std::cout << "Invalid\n";
+                break;
+            }
+
 
             if (quantity <= 0 || total_cost <= 0) {
                 std::cout << "Invalid\n";
@@ -322,17 +377,11 @@ void Application::handle_show_finance(const std::vector<std::string> &args) {
         finance_manager.show_all();
     } else if (args.size() == 1) {
         int count = 0;
-        try {
-            size_t p = 0;
-            count = std::stoi(args[0], &p);
-            if (p != args[0].size()) {
-                std::cout << "Invalid\n";
-                return;
-            }
-        } catch (...) {
+        if (!parse_int_strict(args[0], count)) {
             std::cout << "Invalid\n";
             return;
         }
+
         finance_manager.show_last_n(count);
 
     } else {
