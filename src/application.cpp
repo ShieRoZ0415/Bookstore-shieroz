@@ -14,8 +14,7 @@ Application::Application()
 void Application::run() {
     std::string line;
     while (std::getline(std::cin, line)) {
-        // 兼容换行？
-        if (!line.empty() && line.back() == '\r') line.pop_back();
+        line.erase(std::remove(line.begin(), line.end(), '\r'), line.end());
 
         bool all_space = true;
         for (unsigned char ch : line) {

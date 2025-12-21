@@ -4,49 +4,48 @@
 #include <cctype>
 
 std::string CommandParser::trim(const std::string &str) {
-    auto start = str.begin();
-    while (start != str.end() && std::isspace(*start)) {
-        ++start;
-    }
-    
-    auto end = str.end();
-    do {
-        --end;
-    } while (std::distance(start, end) > 0 && std::isspace(*end));
-    
-    return std::string(start, end + 1);
+    size_t l = 0;
+    while (l < str.size() && std::isspace(static_cast<unsigned char>(str[l]))) ++l;
+
+    if (l == str.size()) return "";
+
+    size_t r = str.size() - 1;
+    while (r > l && std::isspace(static_cast<unsigned char>(str[r]))) --r;
+
+    return str.substr(l, r - l + 1);
 }
 
 std::vector<std::string> CommandParser::split(const std::string &line) {
     std::vector<std::string> result;
-    std::istringstream iss(line);
-    std::string token;
-    
+
     bool in_quotes = false;
     std::string current_token;
-    
+
     for (size_t i = 0; i < line.size(); ++i) {
         char c = line[i];
-        
+
         if (c == '"') {
             in_quotes = !in_quotes;
             current_token += c;
-        } else if (c == ' ' && !in_quotes) {
-            if (!current_token.empty()) {
-                result.push_back(trim(current_token));
-                current_token.clear();
-            }
+            continue;
+        }
+
+        // 空格/tab 等在非引号内都作为分隔符
+        if (!in_quotes && std::isspace(static_cast<unsigned char>(c))) {
+            std::string t = trim(current_token);
+            if (!t.empty()) result.push_back(t);
+            current_token.clear();
         } else {
             current_token += c;
         }
     }
-    
-    if (!current_token.empty()) {
-        result.push_back(trim(current_token));
-    }
-    
+
+    std::string t = trim(current_token);
+    if (!t.empty()) result.push_back(t);
+
     return result;
 }
+
 
 Command CommandParser::parse(const std::string &line) {
     Command cmd;
