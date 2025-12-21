@@ -34,10 +34,10 @@ public:
 
     bool select(const std::string &isbn, Session &session);
 
-    bool modify(const std::string &selected_isbn,
+    bool modify(const int &selected_pos,
                 const std::vector<std::pair<std::string, std::string>> &modifications);
 
-    bool import(const std::string &selected_isbn,
+    bool import(const int &selected_pos,
                 int quantity, double total_cost);
 
 private:

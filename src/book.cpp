@@ -87,6 +87,7 @@ bool BookManager::find_by_isbn(const std::string &isbn_str, Book &book, int &ind
         int pos = sizeof(int) + (i - 1) * sizeof(Book);
         Book tmp;
         book_file.read(tmp, pos);
+        if (tmp.isbn[0] == '\0') continue;
 
         if (std::strcmp(isbn_str.c_str(), tmp.isbn) == 0) {
             book = tmp;
@@ -234,21 +235,28 @@ bool BookManager::select(const std::string &isbn_str, Session &session) {
         Book new_book(isbn_str);
         int n = 0;
         book_file.get_info(n, 1);
+
+        const int HEADER = sizeof(int);
+        idx = HEADER + n * static_cast<int>(sizeof(Book));
+
         book_file.write(new_book);
         book_file.write_info(n + 1, 1);
     }
 
-    session.selected_isbn = isbn_str;
+    session.selected_pos = idx;
     return true;
 }
 
-bool BookManager::modify(const std::string &selected_isbn,
+bool BookManager::modify(const int &selected_pos,
                          const std::vector<std::pair<std::string, std::string>> &modifications) {
     if (modifications.empty()) return false;
 
+    if (selected_pos < static_cast<int>(sizeof(int))) return false;
+
     Book book;
-    int idx = 0;
-    if (!find_by_isbn(selected_isbn, book, idx)) return false;
+    book_file.read(book, selected_pos);
+
+    if (book.isbn[0] == '\0') return false;
 
     // 检查是否有重复参数
     std::set<std::string> seen_keys;
@@ -258,15 +266,17 @@ bool BookManager::modify(const std::string &selected_isbn,
         }
     }
 
-    // 检查是否修改ISBN为已有的ISBN（除了自己）
+    // 检查是否修改ISBN为已有的ISBN
     for (const auto& mod : modifications) {
         if (mod.first == "ISBN") {
-            if (mod.second == selected_isbn) return false;
+            if (!validate_isbn(mod.second)) return false;
+
+            if (std::strcmp(book.isbn, mod.second.c_str()) == 0) return false;
 
             Book existing_book;
-            int existing_idx;
+            int existing_idx = 0;
             if (find_by_isbn(mod.second, existing_book, existing_idx)) {
-                return false;
+                if (existing_idx != selected_pos) return false;
             }
         }
     }
@@ -280,6 +290,7 @@ bool BookManager::modify(const std::string &selected_isbn,
 
         if (key == "ISBN") {
             if (!validate_isbn(value)) return false;
+            if (std::strcmp(book.isbn, value.c_str()) == 0) return false;
             std::strncpy(book.isbn, value.c_str(), 20);
             book.isbn[20] = '\0';
         } else if (key == "name") {
@@ -296,7 +307,9 @@ bool BookManager::modify(const std::string &selected_isbn,
             book.keywords[60] = '\0';
         } else if (key == "price") {
             try {
-                double price = std::stod(value);
+                std::size_t p = 0;
+                double price = std::stod(value, &p);
+                if (p != value.size()) return false;
                 if (price < 0) return false;
                 book.price = price;
             } catch (...) {
@@ -307,20 +320,20 @@ bool BookManager::modify(const std::string &selected_isbn,
         }
     }
     
-    book_file.update(book, idx);
+    book_file.update(book, selected_pos);
     return true;
 }
 
-bool BookManager::import(const std::string &selected_isbn,
+bool BookManager::import(const int &selected_pos,
                          int quantity, double total_cost) {
     if (quantity <= 0 || total_cost <= 0) return false;
-    
+    if (selected_pos < static_cast<int>(sizeof(int))) return false;
+
     Book book;
-    int idx = 0;
-    if (!find_by_isbn(selected_isbn, book, idx)) return false;
+    book_file.read(book, selected_pos);
+    if (book.isbn[0] == '\0') return false;
 
     book.quantity += quantity;
-    book_file.update(book, idx);
-    
+    book_file.update(book, selected_pos);
     return true;
 }

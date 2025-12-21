@@ -17,7 +17,11 @@ void Application::run() {
         // 兼容换行？
         if (!line.empty() && line.back() == '\r') line.pop_back();
 
-        if (line.find_first_not_of(' ') == std::string::npos) continue;
+        bool all_space = true;
+        for (unsigned char ch : line) {
+            if (!std::isspace(ch)) { all_space = false; break; }
+        }
+        if (all_space) continue;
 
         Command cmd = parser.parse(line);
 
@@ -151,7 +155,7 @@ void Application::handle_command(const Command &cmd) {
         if (cmd.args.empty() && privilege >= 1) {
             book_manager.show_all();
         } else if (cmd.args[0] == "finance") {
-            handle_show_finance(cmd.args);
+            // handle_show_finance(cmd.args);
         } else if (privilege >= 1) {
             show_books_with_criteria(cmd.args[0]);
         } else {
@@ -206,37 +210,40 @@ void Application::handle_command(const Command &cmd) {
         
     case CommandType::Modify:
         if (!cmd.args.empty() && !sessions.empty() && privilege >= 3) {
-            if (sessions.top().selected_isbn.empty()) {
+            if (sessions.top().selected_pos == -1) {
                 std::cout << "Invalid\n";
                 break;
             }
             
             std::vector<std::pair<std::string, std::string>> modifications;
+            bool bad = false;
+
             for (const auto& arg : cmd.args) {
                 size_t eq_pos = arg.find('=');
-                if (eq_pos == std::string::npos) continue;
-                
+                if (eq_pos == std::string::npos) {
+                    bad = true;
+                    break;
+                }
+
                 std::string key = arg.substr(1, eq_pos - 1);
                 std::string value = arg.substr(eq_pos + 1);
-                
+
                 if (key == "name" || key == "author" || key == "keyword") {
                     if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
                         value = value.substr(1, value.size() - 2);
                     }
                 }
-                
+
                 modifications.emplace_back(key, value);
             }
+
+            if (bad) {
+                std::cout << "Invalid\n";
+                break;
+            }
             
-            bool ok = book_manager.modify(sessions.top().selected_isbn, modifications);
-            if (ok) {
-                for (const auto& mod : modifications) {
-                    if (mod.first == "ISBN") {
-                        sessions.top().selected_isbn = mod.second;
-                        break;
-                    }
-                }
-            } else {
+            bool ok = book_manager.modify(sessions.top().selected_pos, modifications);
+            if (!ok) {
                 std::cout << "Invalid\n";
             }
         } else {
@@ -246,7 +253,7 @@ void Application::handle_command(const Command &cmd) {
         
     case CommandType::Import:
         if (cmd.args.size() == 2 && !sessions.empty() && privilege >= 3) {
-            if (sessions.top().selected_isbn.empty()) {
+            if (sessions.top().selected_pos == -1) {
                 std::cout << "Invalid\n";
                 break;
             }
@@ -273,7 +280,7 @@ void Application::handle_command(const Command &cmd) {
             }
 
             
-            bool ok = book_manager.import(sessions.top().selected_isbn, quantity, total_cost);
+            bool ok = book_manager.import(sessions.top().selected_pos, quantity, total_cost);
             if (ok) {
                 finance_manager.add_expense(total_cost);
             } else {

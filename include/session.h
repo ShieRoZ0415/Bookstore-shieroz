@@ -5,10 +5,10 @@
 struct Session {
     std::string user_id;
     int privilege;
-    std::string selected_isbn;
+    int selected_pos;
 
     Session(const std::string &u = "", int p = 0)
-        : user_id(u), privilege(p), selected_isbn("") {}
+        : user_id(u), privilege(p), selected_pos(-1) {}
 };
 
 class SessionStack {

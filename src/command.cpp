@@ -93,13 +93,19 @@ Command CommandParser::parse(const std::string &line) {
         }
     }
     
-    if (cmd.type != CommandType::ShowFinance) {
+    // 统一填充参数
+    if (cmd.type == CommandType::ShowFinance) {
+
+    } else if (cmd.type == CommandType::Show) {
+
+    } else if (cmd.type == CommandType::ReportFinance || cmd.type == CommandType::ReportEmployee) {
+        // report finance / report employee：无额外参数
+    } else if (cmd.type != CommandType::Quit && cmd.type != CommandType::Exit
+               && cmd.type != CommandType::Empty && cmd.type != CommandType::Unknown) {
         for (size_t i = 1; i < tokens.size(); ++i) {
-            if (!(cmd.type == CommandType::Show && i == 2 && tokens[1] == "finance")) {
-                cmd.args.push_back(tokens[i]);
-            }
+            cmd.args.push_back(tokens[i]);
         }
-    }
-    
+               }
+
     return cmd;
 }
