@@ -14,6 +14,7 @@
 // 禁止：.12, 01, 01.2, 10., 10.000, -1, +1
 static bool is_valid_price_literal(const std::string &s) {
     if (s.empty()) return false;
+    if (s.size() > 13) return false;
 
     // 不允许正负号
     if (s[0] == '+' || s[0] == '-') return false;

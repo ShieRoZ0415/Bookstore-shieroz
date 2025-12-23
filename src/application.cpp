@@ -29,6 +29,7 @@ static bool parse_int_strict(const std::string& s, int& out) {
 
 static bool parse_price_strict(const std::string& s, double& out) {
     if (s.empty()) return false;
+    if (s.size() > 13) return false;
     if (s[0] == '+' || s[0] == '-') return false;
 
     std::size_t dot = s.find('.');
@@ -78,14 +79,21 @@ void Application::run() {
 
         bool all_space = true;
         for (unsigned char ch : line) {
-            if (ch != ' ') { all_space = false; break; }  // 只认空格
+            if (ch != ' ') {
+                all_space = false; break;
+            }  // 只认空格
         }
         if (all_space) continue;
 
         bool bad = false;
         for (unsigned char ch : line) {
             if (ch == ' ') continue;
-            if (!std::isprint(ch)) { bad = true; break; }
+            if (ch > 127 || ch < 32) { bad = true; break; }
+            // 不可见字符非法；任何非空格空白符非法
+            if (!std::isprint(ch) || (std::isspace(ch) && ch != ' ')) {
+                bad = true;
+                break;
+            }
         }
         if (bad) {
             std::cout << "Invalid\n";
@@ -142,11 +150,19 @@ void Application::handle_command(const Command &cmd) {
     }
         
     case CommandType::Logout:
-        if (sessions.empty()) std::cout << "Invalid\n";
-        else sessions.pop();
+        if (privilege < 1 || sessions.empty()) {
+            std::cout << "Invalid\n";
+        } else {
+            sessions.pop();
+        }
         break;
+
         
     case CommandType::Passwd:
+        if (privilege < 1) {
+            std::cout << "Invalid\n";
+            break;
+        }
         if (cmd.args.size() == 2 || cmd.args.size() == 3) {
             std::string user_id = cmd.args[0];
             std::string current_password, new_password;
@@ -215,16 +231,22 @@ void Application::handle_command(const Command &cmd) {
         break;
         
     case CommandType::Show:
-        if (cmd.args.empty() && privilege >= 1) {
-            book_manager.show_all();
-        } else if (cmd.args[0] == "finance") {
-            // handle_show_finance(cmd.args);
-        } else if (privilege >= 1) {
-            show_books_with_criteria(cmd.args[0]);
-        } else {
+        if (privilege < 1) {
             std::cout << "Invalid\n";
+            break;
+        }
+        // show 指令只允许 0 或 1 个附加参数
+        if (cmd.args.size() > 1) {
+            std::cout << "Invalid\n";
+            break;
+        }
+        if (cmd.args.empty()) {
+            book_manager.show_all();
+        } else {
+            show_books_with_criteria(cmd.args[0]);
         }
         break;
+
         
     case CommandType::Buy:
         if (cmd.args.size() == 2 && privilege >= 1) {
@@ -276,8 +298,12 @@ void Application::handle_command(const Command &cmd) {
             bool bad = false;
 
             for (const auto& arg : cmd.args) {
+                if (arg.empty() || arg[0] != '-') {
+                    bad = true;
+                    break;
+                }
                 size_t eq_pos = arg.find('=');
-                if (eq_pos == std::string::npos) {
+                if (eq_pos == std::string::npos || eq_pos <= 1) {
                     bad = true;
                     break;
                 }
@@ -285,14 +311,40 @@ void Application::handle_command(const Command &cmd) {
                 std::string key = arg.substr(1, eq_pos - 1);
                 std::string value = arg.substr(eq_pos + 1);
 
+                // 附加参数内容为空则非法
+                if (value.empty()) {
+                    bad = true;
+                    break;
+                }
+
+                // 允许的 key
+                if (!(key == "ISBN" || key == "name" || key == "author" || key == "keyword" || key == "price")) {
+                    bad = true;
+                    break;
+                }
+
+                // name/author/keyword 必须带双引号；ISBN/price 禁止带双引号
                 if (key == "name" || key == "author" || key == "keyword") {
-                    if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
-                        value = value.substr(1, value.size() - 2);
+                    if (value.size() < 2 || value.front() != '"' || value.back() != '"') {
+                        bad = true;
+                        break;
+                    }
+                    value = value.substr(1, value.size() - 2);
+                    // 引号内不允许再出现双引号
+                    if (value.find('"') != std::string::npos) {
+                        bad = true;
+                        break;
+                    }
+                } else {
+                    if (value.find('"') != std::string::npos) {
+                        bad = true;
+                        break;
                     }
                 }
 
                 modifications.emplace_back(key, value);
             }
+
 
             if (bad) {
                 std::cout << "Invalid\n";
@@ -418,30 +470,72 @@ void Application::handle_log() {
 
 void Application::show_books_with_criteria(const std::string &criteria) {
     std::smatch match;
-    std::regex pattern("-([^=]+)=(.+)");
-    
+    std::regex pattern("-(ISBN|name|author|keyword)=(.+)");
+
     if (!std::regex_match(criteria, match, pattern)) {
         std::cout << "Invalid\n";
         return;
     }
-    
+
     std::string type = match[1];
     std::string value = match[2];
-    
+
+    auto is_ascii_visible = [](const std::string &s) -> bool {
+        for (unsigned char ch : s) {
+            if (ch > 127) return false;
+            if (!std::isprint(ch)) return false;
+        }
+        return true;
+    };
+
     if (type == "name" || type == "author" || type == "keyword") {
+        // 必须有外层引号
         if (value.size() < 2 || value.front() != '"' || value.back() != '"') {
             std::cout << "Invalid\n";
             return;
         }
         value = value.substr(1, value.size() - 2);
+
+        // 引号内不能再出现双引号
+        if (value.find('"') != std::string::npos) {
+            std::cout << "Invalid\n";
+            return;
+        }
+
+        // 最大长度 60（不含引号）
+        if (value.size() > 60) {
+            std::cout << "Invalid\n";
+            return;
+        }
+
+        // 标准 ASCII 可见字符
+        if (!is_ascii_visible(value)) {
+            std::cout << "Invalid\n";
+            return;
+        }
+
+        // show -keyword 只允许单个关键词（出现 '|' 表示多个关键词，操作失败）
+        if (type == "keyword" && value.find('|') != std::string::npos) {
+            std::cout << "Invalid\n";
+            return;
+        }
     }
-    
+
     if (value.empty()) {
         std::cout << "Invalid\n";
         return;
     }
-    
+
     if (type == "ISBN") {
+        // 最大长度 20（允许可见 ASCII）
+        if (value.size() > 20) {
+            std::cout << "Invalid\n";
+            return;
+        }
+        if (!is_ascii_visible(value)) {
+            std::cout << "Invalid\n";
+            return;
+        }
         book_manager.show_by_isbn(value);
     } else if (type == "name") {
         book_manager.show_by_name(value);

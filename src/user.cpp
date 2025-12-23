@@ -81,15 +81,17 @@ void AccountManager::initialize() {
 bool AccountManager::validate_string(const std::string &str, bool allow_quotes) {
     if (str.empty() || str.length() > 30) return false;
 
+    if (!allow_quotes) {
+        for (unsigned char uc : str) {
+            char c = static_cast<char>(uc);
+            if (!(std::isalnum(uc) || c == '_')) return false;
+        }
+        return true;
+    }
+
+    // Username：可见 ASCII，不允许不可见字符。
     for (unsigned char uc : str) {
-        char c = static_cast<char>(uc);
-
-        if (c == ' ') return false;
-
-        if (uc < 33 || uc > 126) return false;
-
-        if (!allow_quotes && c == '"') return false;
-
+        if (uc < 32 || uc > 126) return false;
     }
     return true;
 }
