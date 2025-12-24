@@ -342,6 +342,13 @@ void Application::handle_command(const Command &cmd) {
                     }
                 }
 
+                if (key == "price") {
+                    double tmp = 0.0;
+                    if (!parse_price_strict(value, tmp)) { // 这里会同时保证格式合法 + >0
+                        bad = true;
+                        break;
+                    }
+                }
                 modifications.emplace_back(key, value);
             }
 
@@ -433,7 +440,10 @@ void Application::handle_show_finance(const std::vector<std::string> &args) {
             std::cout << "Invalid\n";
             return;
         }
-
+        if (count < 0) {
+            std::cout << "Invalid\n";
+            return;
+        }
         finance_manager.show_last_n(count);
 
     } else {

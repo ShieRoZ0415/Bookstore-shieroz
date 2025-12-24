@@ -19,7 +19,7 @@ static bool is_valid_price_literal(const std::string &s) {
     // 不允许正负号
     if (s[0] == '+' || s[0] == '-') return false;
 
-    // 拆分整数/小数
+    // 拆分整数、小数
     std::size_t dot = s.find('.');
     if (dot != std::string::npos && s.find('.', dot + 1) != std::string::npos) return false; // 多个点
 
