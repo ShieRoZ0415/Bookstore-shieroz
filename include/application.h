@@ -21,7 +21,7 @@ private:
     FinanceManager finance_manager;
     LogManager log_manager;
 
-    void handle_command(const Command &cmd);
+    void handle_command(const Command &cmd, const std::string &raw_line);
     void handle_show_finance(const std::vector<std::string> &args);
     void handle_report_finance();
     void handle_report_employee();
